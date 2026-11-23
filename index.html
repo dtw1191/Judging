@@ -23,17 +23,44 @@
             <div id="judge-buttons" class="grid-container"></div>
             
             <hr class="divider">
-            <button id="btn-register-teams" class="btn-primary full-width" style="margin-bottom: 12px;">📝 참가팀 등록</button>
+            <button id="btn-admin-mode" class="btn-secondary full-width" style="margin-bottom: 12px; background-color: #555;">⚙️ 관리자 모드 (설정)</button>
+            <button id="btn-register-teams" class="btn-primary full-width" style="margin-bottom: 12px;">📝 참가팀 이름 등록</button>
             <button id="btn-check-results" class="btn-secondary full-width">📊 전체 심사결과 확인</button>
+        </section>
+
+        <!-- 화면 1-1: 관리자 모드 (환경 설정) -->
+        <section id="screen-admin" class="screen">
+            <h2>⚙️ 시스템 설정</h2>
+            <p class="desc">심사위원 수, 참가팀 수, 비밀번호를 설정합니다.</p>
+            <form id="admin-form">
+                <div class="form-group">
+                    <label for="input-total-judges">총 심사위원 수</label>
+                    <input type="number" id="input-total-judges" min="1" max="20" required class="admin-input">
+                </div>
+                <div class="form-group">
+                    <label for="input-total-teams">총 참가팀 수</label>
+                    <input type="number" id="input-total-teams" min="1" max="100" required class="admin-input">
+                </div>
+                
+                <h3 style="margin-top: 20px; margin-bottom: 10px; color: var(--neon-border);">심사위원 접근 코드 (4자리)</h3>
+                <div id="admin-judge-pw-container">
+                    <!-- JS에서 동적 생성 -->
+                </div>
+                
+                <div class="button-group sticky-bottom">
+                    <button type="button" id="btn-cancel-admin" class="btn-secondary">취소</button>
+                    <button type="submit" id="btn-save-admin" class="btn-primary">저장하기</button>
+                </div>
+            </form>
         </section>
 
         <!-- 화면 1-2: 참가팀 이름 등록 화면 -->
         <section id="screen-team-register" class="screen">
             <h2>📝 참가팀 이름 등록</h2>
-            <p class="desc">30개 팀의 참가명을 변경할 수 있습니다.</p>
+            <p class="desc">참가팀의 이름을 변경할 수 있습니다.</p>
             <form id="team-register-form">
                 <div id="team-name-inputs">
-                    <!-- JS에서 30개의 입력 폼 동적 생성 -->
+                    <!-- JS에서 입력 폼 동적 생성 -->
                 </div>
                 
                 <div class="button-group sticky-bottom">
@@ -45,7 +72,7 @@
 
         <!-- 화면 2: 팀 목록 화면 -->
         <section id="screen-team-list" class="screen">
-            <h2>무대 평가 대기 <span id="progress-text">(0/30)</span></h2>
+            <h2>무대 평가 대기 <span id="progress-text"></span></h2>
             <ul id="team-list"></ul>
             <button id="btn-finish-judging" class="btn-primary full-width" style="margin-top: 20px;">✅ 심사 완료 (첫 화면으로)</button>
         </section>
@@ -89,14 +116,8 @@
             
             <div class="table-responsive">
                 <table class="results-table">
-                    <thead>
-                        <tr>
-                            <th>팀명</th>
-                            <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th>
-                            <th>6</th><th>7</th><th>8</th><th>9</th>
-                            <th class="highlight-col">합계</th>
-                            <th>순위</th>
-                        </tr>
+                    <thead id="results-thead">
+                        <!-- JS에서 동적 생성 -->
                     </thead>
                     <tbody id="results-tbody">
                         <!-- JS에서 동적 생성 -->
