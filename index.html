@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>슈퍼스타 평가 시스템</title>
+    <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Pretendard:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header id="app-header">
+        <h1 id="header-title">★ SUPERSTAR 심사 ★</h1>
+        <span id="judge-info" style="display: none;"></span>
+    </header>
+
+    <div class="container">
+        <!-- 화면 1: 첫 화면 -->
+        <section id="screen-select-judge" class="screen active">
+            <h2>심사위원을 선택해주세요</h2>
+            <p class="desc">본인의 번호를 선택하여 심사를 시작하세요.</p>
+            
+            <!-- 심사위원 버튼이 생성되는 영역 -->
+            <div id="judge-buttons" class="grid-container"></div>
+            
+            <hr class="divider">
+            <button id="btn-register-teams" class="btn-primary full-width" style="margin-bottom: 12px;">📝 참가팀 등록</button>
+            <button id="btn-check-results" class="btn-secondary full-width">📊 전체 심사결과 확인</button>
+        </section>
+
+        <!-- 화면 1-2: 참가팀 이름 등록 화면 -->
+        <section id="screen-team-register" class="screen">
+            <h2>📝 참가팀 이름 등록</h2>
+            <p class="desc">30개 팀의 참가명을 변경할 수 있습니다.</p>
+            <form id="team-register-form">
+                <div id="team-name-inputs">
+                    <!-- JS에서 30개의 입력 폼 동적 생성 -->
+                </div>
+                
+                <div class="button-group sticky-bottom">
+                    <button type="button" id="btn-cancel-register" class="btn-secondary">취소</button>
+                    <button type="submit" id="btn-save-teams" class="btn-primary">저장하기</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- 화면 2: 팀 목록 화면 -->
+        <section id="screen-team-list" class="screen">
+            <h2>무대 평가 대기 <span id="progress-text">(0/30)</span></h2>
+            <ul id="team-list"></ul>
+            <button id="btn-finish-judging" class="btn-primary full-width" style="margin-top: 20px;">✅ 심사 완료 (첫 화면으로)</button>
+        </section>
+
+        <!-- 화면 3: 개별 팀 평가 화면 -->
+        <section id="screen-evaluation" class="screen">
+            <h2 id="eval-team-title">팀 평가</h2>
+            <form id="eval-form">
+                <div class="form-group">
+                    <label for="score">평가 점수 (1점 ~ 10점)</label>
+                    <select id="score" required>
+                        <option value="" disabled selected>점수를 선택해주세요</option>
+                        <option value="10">10점 (합격! 최우수)</option>
+                        <option value="9">9점</option>
+                        <option value="8">8점</option>
+                        <option value="7">7점</option>
+                        <option value="6">6점</option>
+                        <option value="5">5점 (보통)</option>
+                        <option value="4">4점</option>
+                        <option value="3">3점</option>
+                        <option value="2">2점</option>
+                        <option value="1">1점 (탈락 위기)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="comment">심사평 (선택)</label>
+                    <textarea id="comment" rows="4" placeholder="참가자를 위한 심사평을 남겨주세요"></textarea>
+                </div>
+                
+                <div class="button-group">
+                    <button type="button" id="btn-cancel" class="btn-secondary">취소</button>
+                    <button type="submit" id="btn-save" class="btn-primary">저장하기</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- 화면 4: 심사 결과 화면 -->
+        <section id="screen-results" class="screen" style="max-width: 100%;">
+            <h2>🏆 최종 합산 결과</h2>
+            <p class="desc">최고/최저점을 제외한 점수 합산 및 순위입니다.</p>
+            
+            <div class="table-responsive">
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>팀명</th>
+                            <th>1</th><th>2</th><th>3</th><th>4</th><th>5</th>
+                            <th>6</th><th>7</th><th>8</th><th>9</th>
+                            <th class="highlight-col">합계</th>
+                            <th>순위</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-tbody">
+                        <!-- JS에서 동적 생성 -->
+                    </tbody>
+                </table>
+            </div>
+            <button id="btn-back-home" class="btn-secondary full-width" style="margin-top: 20px;">첫 화면으로 돌아가기</button>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
