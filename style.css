@@ -1,3 +1,4 @@
+/* (기존 최상단 부분 동일) */
 :root {
     --primary-gradient: linear-gradient(135deg, #9b59b6 0%, #ff1493 100%);
     --bg-dark: #111115;
@@ -148,9 +149,10 @@ h2 {
 }
 
 .team-input-group label {
-    width: 50px;
+    width: 60px;
     color: var(--neon-border);
     font-weight: bold;
+    font-size: 0.9rem;
 }
 
 .team-input-group input {
@@ -168,6 +170,16 @@ h2 {
 .team-input-group input:focus {
     border-color: #ff1493;
     box-shadow: 0 0 8px rgba(255, 20, 147, 0.4);
+}
+
+.admin-input {
+    width: 100%;
+    padding: 12px;
+    background-color: #111;
+    border: 1px solid #444;
+    color: white;
+    border-radius: 6px;
+    font-size: 1rem;
 }
 
 .sticky-bottom {
@@ -292,20 +304,21 @@ h2 {
     background: var(--card-bg);
     border-radius: 10px;
     border: 1px solid #333;
+    /* 스크롤 방지를 위해 min-width 600px 제거 */
 }
 
 .results-table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 600px;
-    font-size: 0.95rem;
 }
 
+/* 일반 셀 크기 최소화 (가로 스크롤 방지용) */
 .results-table th, .results-table td {
-    padding: 14px 8px;
+    padding: 6px 2px;
     text-align: center;
     border-bottom: 1px solid #333;
     white-space: nowrap;
+    font-size: 0.75rem; 
 }
 
 .results-table th {
@@ -318,10 +331,23 @@ h2 {
     background-color: rgba(255, 20, 147, 0.1);
 }
 
+/* 합계와 순위는 기존 크기 유지 */
+.results-table th.highlight-col,
+.results-table td.highlight-col,
+.results-table th.rank-col,
+.results-table td.rank-col {
+    font-size: 1.1rem;
+    padding: 8px 4px;
+}
+
 .results-table td.highlight-col {
     font-weight: bold;
     color: #ff69b4;
-    font-size: 1.1rem;
+}
+
+.results-table td.rank-col {
+    font-weight: bold;
+    color: #fff;
 }
 
 .excluded-score {
