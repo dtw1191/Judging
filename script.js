@@ -1,14 +1,21 @@
+// ==========================================
+// 1. 여기에 복사한 구글 Apps Script 웹 앱 URL을 붙여넣으세요
+// ==========================================
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxOU8ccKYbO1Evogw1g1W3JiangoZCwJ4Vmpf-p80oBj0OvY9F4sbImFB0NSEdxKjw7PQ/exec";
+
 const ADMIN_CODE = '11251125';
 
 let TOTAL_JUDGES = 9;
 let TOTAL_TEAMS = 30;
 let judgePasswords = {};
+let teamNames = {};
+let allEvaluations = {};
 
 let currentJudgeId = null;
 let currentTeamId = null;
-let evaluations = {}; 
-let teamNames = {}; 
-let isEventSetup = false; // 중복 이벤트 등록 방지용 변수 추가
+let currentScreen = 'selectJudge';
+let isEventSetup = false;
+let resultsRefreshTimer = null;
 
 const screens = {
     selectJudge: document.getElementById('screen-select-judge'),
@@ -28,69 +35,100 @@ const resultsTbody = document.getElementById('results-tbody');
 const resultsThead = document.getElementById('results-thead');
 const teamNameInputsContainer = document.getElementById('team-name-inputs');
 
-function init() {
-    loadSettings();
-    loadTeamNames();
-    createJudgeButtons();
-    checkLoginFromUrl();
+// ==========================================
+// 2. 구글 시트 데이터 통신 함수
+// ==========================================
+async function loadAllData() {
+    try {
+        const response = await fetch(GAS_URL);
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            TOTAL_JUDGES = result.settings.totalJudges || 9;
+            TOTAL_TEAMS = result.settings.totalTeams || 30;
+            judgePasswords = result.settings.judgePasswords || {};
+            teamNames = result.teamNames || {};
+            allEvaluations = result.evaluations || {};
+
+            for (let i = 1; i <= Math.max(TOTAL_JUDGES, 20); i++) {
+                if (!judgePasswords[i]) judgePasswords[i] = '1234';
+            }
+            for (let i = 1; i <= TOTAL_TEAMS; i++) {
+                if (!teamNames[i]) teamNames[i] = `팀 ${i}`;
+            }
+
+            createJudgeButtons();
+            if (currentScreen === 'teamList' && currentJudgeId) renderTeamList();
+            if (currentScreen === 'results') generateResults();
+        }
+    } catch (err) {
+        console.error('데이터 불러오기 실패:', err);
+        alert('구글 시트에서 데이터를 불러오지 못했습니다. URL 설정을 확인해주세요.');
+    }
+}
+
+async function postToGas(payload) {
+    // CORS 오류 방지를 위해 text/plain으로 전송
+    const response = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+    if (result.status !== 'success') {
+        throw new Error(result.message || '저장 실패');
+    }
+    return result;
+}
+
+// ==========================================
+// 3. 초기화 및 화면 제어
+// ==========================================
+async function init() {
     setupEventListeners();
-}
-
-function loadSettings() {
-    TOTAL_JUDGES = parseInt(localStorage.getItem('totalJudges')) || 9;
-    TOTAL_TEAMS = parseInt(localStorage.getItem('totalTeams')) || 30;
-    
-    const savedPw = localStorage.getItem('judgePasswords');
-    if (savedPw) {
-        judgePasswords = JSON.parse(savedPw);
-    }
-    // 설정되지 않은 심사위원 비밀번호는 '1234'로 초기화
-    for (let i = 1; i <= Math.max(TOTAL_JUDGES, 20); i++) {
-        if (!judgePasswords[i]) {
-            judgePasswords[i] = '1234';
-        }
-    }
-}
-
-function loadTeamNames() {
-    const savedNames = localStorage.getItem('teamNames');
-    if (savedNames) {
-        teamNames = JSON.parse(savedNames);
-    }
-    // 팀 수가 늘어났을 경우 기본 이름 할당
-    for (let i = 1; i <= TOTAL_TEAMS; i++) {
-        if (!teamNames[i]) {
-            teamNames[i] = `팀 ${i}`;
-        }
-    }
+    await loadAllData();
+    checkLoginFromUrl();
 }
 
 function showScreen(screenName) {
+    currentScreen = screenName;
     Object.values(screens).forEach(screen => {
-        if(screen) screen.classList.remove('active');
+        if (screen) screen.classList.remove('active');
     });
-    if(screens[screenName]) {
+    if (screens[screenName]) {
         screens[screenName].classList.add('active');
         window.scrollTo(0, 0);
+    }
+
+    // 결과 화면일 때만 10초마다 자동 새로고침
+    if (resultsRefreshTimer) {
+        clearInterval(resultsRefreshTimer);
+        resultsRefreshTimer = null;
+    }
+    if (screenName === 'results') {
+        resultsRefreshTimer = setInterval(loadAllData, 10000);
     }
 }
 
 function checkLoginFromUrl() {
     const urlParams = new URLSearchParams(window.location.search);
-    const judgeParam = urlParams.get('judge');
-    
+    const judgeParam = parseInt(urlParams.get('judge'));
+
     if (judgeParam && judgeParam >= 1 && judgeParam <= TOTAL_JUDGES) {
-        loginAsJudge(parseInt(judgeParam), true);
+        loginAsJudge(judgeParam);
     } else {
         showScreen('selectJudge');
     }
 }
 
+// ==========================================
+// 4. 화면 렌더링 함수
+// ==========================================
 function createJudgeButtons() {
     const container = document.getElementById('judge-buttons');
     if (!container) return;
-    
-    container.innerHTML = ''; 
+
+    container.innerHTML = '';
     for (let i = 1; i <= TOTAL_JUDGES; i++) {
         const btn = document.createElement('button');
         btn.className = 'grid-btn';
@@ -107,18 +145,11 @@ function createJudgeButtons() {
     }
 }
 
-function loginAsJudge(judgeId, skipRender = false) {
+function loginAsJudge(judgeId) {
     currentJudgeId = judgeId;
     judgeInfo.textContent = `심사위원 ${judgeId}`;
     judgeInfo.style.display = 'inline-block';
-    
-    const savedData = localStorage.getItem(`evalData_judge_${currentJudgeId}`);
-    if (savedData) {
-        evaluations = JSON.parse(savedData);
-    } else {
-        evaluations = {};
-    }
-    
+
     renderTeamList();
     showScreen('teamList');
 }
@@ -126,9 +157,9 @@ function loginAsJudge(judgeId, skipRender = false) {
 function renderAdminPasswordInputs() {
     const container = document.getElementById('admin-judge-pw-container');
     container.innerHTML = '';
-    
+
     const currentInputJudges = parseInt(document.getElementById('input-total-judges').value) || TOTAL_JUDGES;
-    
+
     for (let i = 1; i <= currentInputJudges; i++) {
         const val = judgePasswords[i] || '1234';
         container.innerHTML += `
@@ -141,8 +172,8 @@ function renderAdminPasswordInputs() {
 }
 
 function renderTeamRegisterInputs() {
-    if(!teamNameInputsContainer) return;
-    
+    if (!teamNameInputsContainer) return;
+
     teamNameInputsContainer.innerHTML = '';
     for (let i = 1; i <= TOTAL_TEAMS; i++) {
         const div = document.createElement('div');
@@ -158,11 +189,12 @@ function renderTeamRegisterInputs() {
 function renderTeamList() {
     teamListUl.innerHTML = '';
     let completedCount = 0;
+    const myEvals = allEvaluations[`judge_${currentJudgeId}`] || {};
 
     for (let i = 1; i <= TOTAL_TEAMS; i++) {
         const li = document.createElement('li');
-        const isCompleted = evaluations[i] != null;
-        
+        const isCompleted = myEvals[i] != null;
+
         if (isCompleted) completedCount++;
 
         li.innerHTML = `
@@ -181,26 +213,25 @@ function renderTeamList() {
 function openEvaluation(teamId) {
     currentTeamId = teamId;
     evalTeamTitle.textContent = `${teamNames[teamId]} 무대 평가`;
-    
-    const data = evaluations[teamId] || { score: '', comment: '' };
+
+    const myEvals = allEvaluations[`judge_${currentJudgeId}`] || {};
+    const data = myEvals[teamId] || { score: '', comment: '' };
     document.getElementById('score').value = data.score;
     document.getElementById('comment').value = data.comment;
-    
+
     showScreen('evaluation');
 }
 
 function generateResults() {
-    // 동적 테이블 헤더 생성
     let theadHtml = `<tr><th>팀명</th>`;
-    for(let i = 1; i <= TOTAL_JUDGES; i++) {
+    for (let i = 1; i <= TOTAL_JUDGES; i++) {
         theadHtml += `<th>${i}</th>`;
     }
     theadHtml += `<th class="highlight-col">합계</th><th class="rank-col">순위</th></tr>`;
     resultsThead.innerHTML = theadHtml;
 
-    // 본문 생성
     resultsTbody.innerHTML = '';
-    
+
     let teamsData = [];
     for (let i = 1; i <= TOTAL_TEAMS; i++) {
         teamsData.push({
@@ -213,12 +244,11 @@ function generateResults() {
     }
 
     for (let j = 1; j <= TOTAL_JUDGES; j++) {
-        const savedData = localStorage.getItem(`evalData_judge_${j}`);
-        if (savedData) {
-            const judgeData = JSON.parse(savedData);
+        const judgeData = allEvaluations[`judge_${j}`];
+        if (judgeData) {
             for (let t = 1; t <= TOTAL_TEAMS; t++) {
                 if (judgeData[t] && judgeData[t].score) {
-                    teamsData[t-1].scores[j-1] = judgeData[t].score;
+                    teamsData[t - 1].scores[j - 1] = judgeData[t].score;
                 }
             }
         }
@@ -234,7 +264,7 @@ function generateResults() {
             const minItem = validScores[0];
             const maxItem = validScores[validScores.length - 1];
             team.excludedIndices.push(minItem.index, maxItem.index);
-            
+
             for (let i = 1; i < validScores.length - 1; i++) {
                 team.total += validScores[i].score;
             }
@@ -245,7 +275,7 @@ function generateResults() {
 
     let sortedTeams = [...teamsData].sort((a, b) => b.total - a.total);
     let currentRank = 1;
-    
+
     sortedTeams.forEach((team, index) => {
         if (index > 0 && team.total < sortedTeams[index - 1].total) {
             currentRank = index + 1;
@@ -256,35 +286,37 @@ function generateResults() {
     teamsData.forEach(team => {
         const tr = document.createElement('tr');
         let html = `<td><strong>${teamNames[team.id]}</strong></td>`;
-        
+
         for (let j = 0; j < TOTAL_JUDGES; j++) {
             let score = team.scores[j];
             let cellText = score !== null ? score : '-';
             let isExcluded = team.excludedIndices.includes(j);
-            
+
             if (isExcluded) {
                 html += `<td class="excluded-score">${cellText}</td>`;
             } else {
                 html += `<td>${cellText}</td>`;
             }
         }
-        
+
         html += `<td class="highlight-col">${team.total}</td>`;
         html += `<td class="rank-col">${team.rank}</td>`;
-        
+
         tr.innerHTML = html;
         resultsTbody.appendChild(tr);
     });
 }
 
+// ==========================================
+// 5. 버튼 이벤트 등록 (구글 시트 저장)
+// ==========================================
 function setupEventListeners() {
-    // 이미 이벤트가 세팅되었다면 중단 (중복 방지)
     if (isEventSetup) return;
     isEventSetup = true;
 
-    // 관리자 모드
+    // 관리자 모드 진입
     const btnAdminMode = document.getElementById('btn-admin-mode');
-    if(btnAdminMode) {
+    if (btnAdminMode) {
         btnAdminMode.addEventListener('click', () => {
             const code = prompt('관리자 코드를 입력하세요.');
             if (code === ADMIN_CODE) {
@@ -298,45 +330,56 @@ function setupEventListeners() {
         });
     }
 
-    // 심사위원 수 변경 시 비밀번호 입력칸 실시간 업데이트
     const inputTotalJudges = document.getElementById('input-total-judges');
-    if(inputTotalJudges) {
+    if (inputTotalJudges) {
         inputTotalJudges.addEventListener('input', renderAdminPasswordInputs);
     }
 
     // 관리자 설정 저장
     const formAdmin = document.getElementById('admin-form');
-    if(formAdmin) {
-        formAdmin.addEventListener('submit', (e) => {
+    if (formAdmin) {
+        formAdmin.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const saveBtn = document.getElementById('btn-save-admin');
+            saveBtn.disabled = true;
+            saveBtn.textContent = '저장 중...';
+
             const newJudges = parseInt(document.getElementById('input-total-judges').value);
             const newTeams = parseInt(document.getElementById('input-total-teams').value);
-            
-            localStorage.setItem('totalJudges', newJudges);
-            localStorage.setItem('totalTeams', newTeams);
-            
+            const newPasswords = { ...judgePasswords };
+
             for (let i = 1; i <= newJudges; i++) {
                 const pwInput = document.getElementById(`input-pw-${i}`);
-                if (pwInput) {
-                    judgePasswords[i] = pwInput.value.trim();
-                }
+                if (pwInput) newPasswords[i] = pwInput.value.trim();
             }
-            localStorage.setItem('judgePasswords', JSON.stringify(judgePasswords));
-            
-            alert('시스템 설정이 저장되었습니다.');
-            init(); // 설정 적용 후 화면 갱신
-            showScreen('selectJudge');
+
+            try {
+                await postToGas({
+                    action: 'saveSettings',
+                    totalJudges: newJudges,
+                    totalTeams: newTeams,
+                    judgePasswords: newPasswords
+                });
+                await loadAllData();
+                alert('시스템 설정이 구글 시트에 저장되었습니다.');
+                showScreen('selectJudge');
+            } catch (err) {
+                alert('저장 중 오류가 발생했습니다: ' + err.message);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '저장하기';
+            }
         });
     }
 
     const btnCancelAdmin = document.getElementById('btn-cancel-admin');
-    if(btnCancelAdmin) {
+    if (btnCancelAdmin) {
         btnCancelAdmin.addEventListener('click', () => showScreen('selectJudge'));
     }
 
-    // 팀 이름 등록
+    // 팀 이름 등록 진입
     const btnRegister = document.getElementById('btn-register-teams');
-    if(btnRegister) {
+    if (btnRegister) {
         btnRegister.addEventListener('click', () => {
             const code = prompt('팀 등록을 위한 코드번호를 입력하세요.');
             if (code === ADMIN_CODE) {
@@ -349,51 +392,91 @@ function setupEventListeners() {
     }
 
     const btnCancelReg = document.getElementById('btn-cancel-register');
-    if(btnCancelReg) {
+    if (btnCancelReg) {
         btnCancelReg.addEventListener('click', () => showScreen('selectJudge'));
     }
 
+    // 팀 이름 저장
     const formRegister = document.getElementById('team-register-form');
-    if(formRegister) {
-        formRegister.addEventListener('submit', (e) => {
+    if (formRegister) {
+        formRegister.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const saveBtn = document.getElementById('btn-save-teams');
+            saveBtn.disabled = true;
+            saveBtn.textContent = '저장 중...';
+
+            const newTeamNames = {};
             for (let i = 1; i <= TOTAL_TEAMS; i++) {
                 const inputElement = document.getElementById(`input-team-name-${i}`);
-                if(inputElement) {
+                if (inputElement) {
                     const inputVal = inputElement.value.trim();
-                    teamNames[i] = inputVal || `팀 ${i}`; 
+                    newTeamNames[i] = inputVal || `팀 ${i}`;
                 }
             }
-            localStorage.setItem('teamNames', JSON.stringify(teamNames));
-            alert('참가팀 이름이 성공적으로 저장되었습니다.');
-            showScreen('selectJudge');
+
+            try {
+                await postToGas({
+                    action: 'saveTeamNames',
+                    teamNames: newTeamNames
+                });
+                await loadAllData();
+                alert('참가팀 이름이 구글 시트에 저장되었습니다.');
+                showScreen('selectJudge');
+            } catch (err) {
+                alert('저장 중 오류가 발생했습니다: ' + err.message);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '저장하기';
+            }
         });
     }
 
     const btnCancel = document.getElementById('btn-cancel');
-    if(btnCancel) {
+    if (btnCancel) {
         btnCancel.addEventListener('click', () => showScreen('teamList'));
     }
 
-    if(evalForm) {
-        evalForm.addEventListener('submit', (e) => {
+    // 개별 팀 평가 저장
+    if (evalForm) {
+        evalForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+            const saveBtn = document.getElementById('btn-save');
+            saveBtn.disabled = true;
+            saveBtn.textContent = '저장 중...';
+
             const score = parseInt(document.getElementById('score').value);
             const comment = document.getElementById('comment').value;
 
-            evaluations[currentTeamId] = { score, comment };
-            localStorage.setItem(`evalData_judge_${currentJudgeId}`, JSON.stringify(evaluations));
+            try {
+                await postToGas({
+                    action: 'saveEvaluation',
+                    judgeId: currentJudgeId,
+                    teamId: currentTeamId,
+                    score,
+                    comment
+                });
+                
+                // 로컬 상태 즉시 반영
+                const judgeKey = `judge_${currentJudgeId}`;
+                if (!allEvaluations[judgeKey]) allEvaluations[judgeKey] = {};
+                allEvaluations[judgeKey][currentTeamId] = { score, comment };
 
-            renderTeamList();
-            showScreen('teamList');
+                renderTeamList();
+                showScreen('teamList');
+            } catch (err) {
+                alert('점수 저장 중 오류가 발생했습니다: ' + err.message);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '저장하기';
+            }
         });
     }
 
+    // 심사 완료 (첫 화면으로)
     const btnFinish = document.getElementById('btn-finish-judging');
-    if(btnFinish) {
+    if (btnFinish) {
         btnFinish.addEventListener('click', () => {
-            if(confirm('심사를 완료하고 첫 화면으로 돌아가시겠습니까?')) {
+            if (confirm('심사를 완료하고 첫 화면으로 돌아가시겠습니까?')) {
                 currentJudgeId = null;
                 judgeInfo.style.display = 'none';
                 window.history.replaceState({}, document.title, window.location.pathname);
@@ -402,11 +485,13 @@ function setupEventListeners() {
         });
     }
 
+    // 전체 심사결과 확인
     const btnCheck = document.getElementById('btn-check-results');
-    if(btnCheck) {
-        btnCheck.addEventListener('click', () => {
+    if (btnCheck) {
+        btnCheck.addEventListener('click', async () => {
             const code = prompt('결과 확인을 위한 코드번호를 입력하세요.');
             if (code === ADMIN_CODE) {
+                await loadAllData();
                 generateResults();
                 showScreen('results');
             } else if (code !== null) {
@@ -416,7 +501,7 @@ function setupEventListeners() {
     }
 
     const btnBackHome = document.getElementById('btn-back-home');
-    if(btnBackHome) {
+    if (btnBackHome) {
         btnBackHome.addEventListener('click', () => showScreen('selectJudge'));
     }
 }
